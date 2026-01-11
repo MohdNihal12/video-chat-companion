@@ -2,6 +2,7 @@ import { useState } from "react";
 import { VideoInput } from "@/components/VideoInput";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ChatInterface } from "@/components/ChatInterface";
+import { Header } from "@/components/Header";
 import { processVideo, askQuestion } from "@/lib/api";
 import { extractVideoId } from "@/lib/youtube";
 import { useToast } from "@/hooks/use-toast";
@@ -78,7 +79,8 @@ const Index = () => {
   if (!videoId) {
     return (
       <div className="min-h-screen flex flex-col">
-        <div className="flex-1 flex items-center justify-center p-6">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6 pt-20">
           <VideoInput onSubmit={handleVideoSubmit} isLoading={isProcessing} />
         </div>
         <footer className="py-6 text-center border-t border-border/50">
@@ -93,7 +95,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="flex-1 flex flex-col lg:flex-row">
+      <Header />
+      <div className="flex-1 flex flex-col lg:flex-row pt-14">
         {/* Sidebar with video */}
         <div className="lg:w-[400px] xl:w-[480px] flex-shrink-0 p-4 lg:p-6 border-b lg:border-b-0 lg:border-r border-border">
           <div className="space-y-4">
