@@ -1,27 +1,50 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { VideoInput } from "@/components/VideoInput";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ChatInterface } from "@/components/ChatInterface";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { processVideo, askQuestion } from "@/lib/api";
+import { VideoLibrary } from "@/components/VideoLibrary";
+import { MultiVideoToggle } from "@/components/MultiVideoToggle";
+import { processVideo, askEnhanced, getVideoList } from "@/lib/api";
 import { extractVideoId } from "@/lib/youtube";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
+import { VideoMetadata, Citation } from "@/lib/types";
 
 interface Message {
   role: "user" | "model";
   content: string;
+  citations?: Citation[];
 }
 
 const Index = () => {
   const [videoUrl, setVideoUrl] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [videos, setVideos] = useState<VideoMetadata[]>([]);
+  const [isMultiVideoMode, setIsMultiVideoMode] = useState(false);
+  const [showVideoInput, setShowVideoInput] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const { toast } = useToast();
+
+  // Load video list on mount
+  useEffect(() => {
+    loadVideoList();
+  }, []);
+
+  const loadVideoList = async () => {
+    try {
+      const videoList = await getVideoList();
+      console.log('📹 Loaded videos:', videoList);
+      console.log('📊 Video count:', videoList.length);
+      setVideos(videoList);
+    } catch (error) {
+      console.error("❌ Failed to load video list:", error);
+    }
+  };
 
   const handleVideoSubmit = async (url: string) => {
     setIsProcessing(true);
@@ -30,6 +53,11 @@ const Index = () => {
       if (result.success) {
         setVideoUrl(url);
         setVideoId(result.video_id);
+        setShowVideoInput(false);
+
+        // Refresh video list
+        await loadVideoList();
+
         toast({
           title: "Video processed!",
           description: "You can now ask questions about the video.",
@@ -47,16 +75,24 @@ const Index = () => {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!videoId) return;
+    if (!videoId && !isMultiVideoMode) return;
 
     const userMessage: Message = { role: "user", content: message };
     setMessages((prev) => [...prev, userMessage]);
     setIsChatLoading(true);
 
     try {
-      const result = await askQuestion(message, videoId, messages);
+      // Use null for multi-video mode, specific videoId for single video
+      const targetVideoId = isMultiVideoMode ? null : videoId;
+
+      const result = await askEnhanced(message, targetVideoId, 5, messages);
+
       if (result.success) {
-        const aiMessage: Message = { role: "model", content: result.answer };
+        const aiMessage: Message = {
+          role: "model",
+          content: result.answer,
+          citations: result.citations
+        };
         setMessages((prev) => [...prev, aiMessage]);
       }
     } catch (error) {
@@ -75,9 +111,101 @@ const Index = () => {
     setVideoUrl("");
     setVideoId(null);
     setMessages([]);
+    setIsMultiVideoMode(false);
+    setShowVideoInput(false);
   };
 
-  if (!videoId) {
+  const handleSelectVideo = (selectedVideoId: string) => {
+    console.log('🎬 Selecting video:', selectedVideoId);
+    const selectedVideo = videos.find(v => v.video_id === selectedVideoId);
+    console.log('📼 Found video:', selectedVideo);
+
+    if (selectedVideo) {
+      setVideoId(selectedVideoId);
+
+      // If URL is not provided, construct it from video_id
+      const url = selectedVideo.url || `https://www.youtube.com/watch?v=${selectedVideoId}`;
+      console.log('🔗 Setting URL:', url);
+      setVideoUrl(url);
+
+      setMessages([]);
+      setIsMultiVideoMode(false);
+    } else {
+      console.error('❌ Video not found in library:', selectedVideoId);
+    }
+  };
+
+  const handleDeleteVideo = async (videoIdToDelete: string) => {
+    // TODO: Implement backend delete endpoint
+    toast({
+      title: "Delete not implemented",
+      description: "Video deletion will be available once the backend endpoint is ready.",
+      variant: "default",
+    });
+  };
+
+  const handleAddNewVideo = () => {
+    setShowVideoInput(true);
+  };
+
+  // Debug: Log current state
+  console.log('🎯 Current state:', {
+    videoId,
+    videosCount: videos.length,
+    showVideoInput,
+    shouldShowLibrary: !videoId && videos.length > 0 && !showVideoInput
+  });
+
+  // Show video library if videos exist but no video is selected
+  if (!videoId && videos.length > 0 && !showVideoInput) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <Header />
+
+        {/* Background effects */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/10 blur-[120px] animate-pulse-soft" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[120px] animate-pulse-soft" style={{ animationDelay: "1s" }} />
+        </div>
+
+        <div className="relative z-10 w-full max-w-3xl space-y-6 animate-fade-in">
+          <div className="text-center space-y-4 mb-8">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600">
+                Your Video Library
+              </span>
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Select a video to start chatting or add a new one
+            </p>
+          </div>
+
+          <VideoLibrary
+            videos={videos}
+            currentVideoId={videoId}
+            onSelectVideo={handleSelectVideo}
+            onDeleteVideo={handleDeleteVideo}
+          />
+
+          <Button
+            onClick={handleAddNewVideo}
+            className="w-full gap-2"
+            size="lg"
+          >
+            <Plus className="w-5 h-5" />
+            Add New Video
+          </Button>
+        </div>
+
+        <div className="absolute bottom-0 w-full z-20">
+          <Footer />
+        </div>
+      </div>
+    );
+  }
+
+  // Show video input form
+  if (!videoId || showVideoInput) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
         <Header />
@@ -89,6 +217,17 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 w-full max-w-2xl space-y-8 text-center animate-fade-in">
+          {videos.length > 0 && (
+            <Button
+              variant="ghost"
+              onClick={() => setShowVideoInput(false)}
+              className="gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Library
+            </Button>
+          )}
+
           <div className="space-y-4">
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6">
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600 animate-text-reveal inline-block">
@@ -115,6 +254,9 @@ const Index = () => {
       </div>
     );
   }
+
+  // If we reach here, we should show the chat interface
+  console.log('💬 Rendering chat interface with:', { videoId, videoUrl });
 
   return (
     <div className="min-h-screen flex flex-col pt-[72px] bg-background">
@@ -146,6 +288,15 @@ const Index = () => {
                 </div>
                 <p className="font-mono text-xs truncate opacity-70">{videoId}</p>
               </div>
+
+              {/* Multi-Video Toggle */}
+              {videos.length > 1 && (
+                <MultiVideoToggle
+                  isMultiVideoMode={isMultiVideoMode}
+                  onToggle={setIsMultiVideoMode}
+                  videoCount={videos.length}
+                />
+              )}
             </div>
           </div>
         </aside>
