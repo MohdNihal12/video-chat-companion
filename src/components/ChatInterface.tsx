@@ -3,10 +3,12 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Sparkles } from "lucide-react";
+import { Citation } from "@/lib/types";
 
 interface Message {
   role: "user" | "model";
   content: string;
+  citations?: Citation[];
 }
 
 interface ChatInterfaceProps {
@@ -89,7 +91,12 @@ export const ChatInterface = ({
           ) : (
             <div className="space-y-8 max-w-4xl mx-auto pb-10">
               {messages.map((message, index) => (
-                <ChatMessage key={index} role={message.role} content={message.content} />
+                <ChatMessage
+                  key={index}
+                  role={message.role}
+                  content={message.content}
+                  citations={message.citations}
+                />
               ))}
               {isLoading && (
                 <div className="flex gap-4 animate-fade-in">
